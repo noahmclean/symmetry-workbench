@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Crystallographic Symmetry Workbench — Mineralogy Teaching Tool</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+  <!-- Konva.js v9 via CDN -->
+  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header & Mode Bar -->
+    <header class="top-bar">
+      <div class="brand-block">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+            <polygon points="14,2 25,8.5 25,19.5 14,26 3,19.5 3,8.5" stroke="#38bdf8" stroke-width="2" fill="rgba(56,189,248,0.18)" />
+            <polygon points="14,7 20.5,10.8 20.5,17.2 14,21 7.5,17.2 7.5,10.8" stroke="#facc15" stroke-width="1.3" fill="none" />
+            <circle cx="14" cy="14" r="2.3" fill="#38bdf8" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="app-title">2D Crystallographic Symmetry Workbench</h1>
+          <p class="app-subtitle">Interactive Point Symmetry &amp; Periodic Lattice Explorer for Undergraduate Mineralogy</p>
+        </div>
+      </div>
+
+      <nav class="mode-switcher" aria-label="Exploration Mode">
+        <button id="btn-mode-shape" class="mode-btn active" type="button">
+          Point Group Shapes (2D Crystals)
+        </button>
+        <button id="btn-mode-wallpaper" class="mode-btn" type="button">
+          Wallpaper Patterns (Periodic Tilings)
+        </button>
+      </nav>
+    </header>
+
+    <!-- Main 3-Column Laboratory Workspace -->
+    <main class="workspace-grid">
+      <!-- Left Sidebar: Specimen Generator, Unit Cell Tool & Symmetry Toolbox -->
+      <aside class="panel sidebar-left" aria-label="Generator and Symmetry Tools">
+        <!-- 1. Specimen / Pattern Selector -->
+        <section class="panel-section">
+          <h2 class="section-title">1. Specimen &amp; Geometry</h2>
+
+          <div id="point-group-controls" class="control-group">
+            <label for="select-point-group" class="field-label">Crystal Specimen Selector</label>
+            <select id="select-point-group" class="select-input"></select>
+            <div id="point-class-reveal" class="class-reveal-box hidden">
+              <span class="reveal-tag">Crystal Point Symmetry Class:</span>
+              <strong id="revealed-class-name"></strong>
+            </div>
+          </div>
+
+          <div id="wallpaper-group-controls" class="control-group hidden">
+            <label for="select-wallpaper-group" class="field-label">Periodic Pattern Selector</label>
+            <select id="select-wallpaper-group" class="select-input"></select>
+            <div id="wallpaper-class-reveal" class="class-reveal-box hidden">
+              <span class="reveal-tag">Periodic Pattern Class:</span>
+              <strong id="revealed-wallpaper-name"></strong>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <span class="field-label">Polygon Boundary Morphology</span>
+            <div class="segmented-control" role="group" aria-label="Polygon Morphology">
+              <button id="btn-shape-convex" type="button" class="seg-btn">
+                Convex Crystal
+              </button>
+              <button id="btn-shape-nonconvex" type="button" class="seg-btn active">
+                Non-Convex / Star
+              </button>
+              <button id="btn-shape-tessellated" type="button" class="seg-btn hidden">
+                Tessellated Tiling
+              </button>
+            </div>
+          </div>
+
+          <button id="btn-random-shape" type="button" class="btn-secondary full-width">
+            <span aria-hidden="true">↻</span> New Random Shape
+          </button>
+          <button id="btn-random-specimen" type="button" class="btn-secondary full-width">
+            <span aria-hidden="true">🎲</span> New Random Crystal Specimen
+          </button>
+          <p id="mineral-context-note" class="context-note hidden"></p>
+        </section>
+
+        <!-- 2. Unit Cell Outlining Tool (Wallpaper Mode only — placed above Symmetry Glyphs) -->
+        <section id="unit-cell-panel" class="panel-section hidden">
+          <div class="section-header-row">
+            <h2 class="section-title">2. Unit Cell Outlining Tool</h2>
+            <span id="unit-cell-status-pill" class="cell-badge">Step 1: Basis (a, b)</span>
+          </div>
+          <p class="helper-caption">Drag the white origin handle <strong>O</strong> and vector tips <strong class="text-vec-a">a</strong> and <strong class="text-vec-b">b</strong> to outline a primitive unit cell, then click <strong>Test Unit Cell</strong> to unlock the symmetry glyphs.</p>
+
+          <div class="cell-metrics-grid">
+            <div class="metric-box">
+              <span class="metric-label">|a| Length</span>
+              <span id="cell-metric-a" class="metric-val val-a">134 px</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">|b| Length</span>
+              <span id="cell-metric-b" class="metric-val val-b">119 px</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Angle γ</span>
+              <span id="cell-metric-gamma" class="metric-val">68°</span>
+            </div>
+          </div>
+
+          <div class="action-stack">
+            <button id="btn-test-unit-cell" type="button" class="btn-primary-test">
+              <span class="test-icon" aria-hidden="true">⊞</span> Test Unit Cell
+            </button>
+            <button id="btn-reset-cell" type="button" class="btn-subtle full-width">
+              Unlock / Reset Cell Handles
+            </button>
+          </div>
+        </section>
+
+        <!-- Symmetry Glyphs & Snapping Toolbox -->
+        <section id="symmetry-glyphs-panel" class="panel-section">
+          <div class="section-header-row">
+            <h2 id="symmetry-glyphs-title" class="section-title">2. Symmetry Glyphs</h2>
+            <span class="snap-pill">14px Snap</span>
+          </div>
+          <p id="glyph-lock-notice" class="lock-notice hidden">
+            🔒 Identify and verify the unit cell above to unlock symmetry glyphs.
+          </p>
+          <p class="helper-caption">Click a glyph to place it on the stage, then drag to snap to vertices, midpoints, centroids, or lattice sites.</p>
+
+          <div class="glyph-grid">
+            <button id="tool-rot2" type="button" class="glyph-btn" data-tool="rot2">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <path d="M14 3 C21 9, 21 19, 14 25 C7 19, 7 9, 14 3 Z" fill="#f97316" stroke="#ffedd5" stroke-width="1.8" />
+              </svg>
+              <span>2-Fold</span>
+            </button>
+
+            <button id="tool-rot3" type="button" class="glyph-btn" data-tool="rot3">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <polygon points="14,3 25,22 3,22" fill="#eab308" stroke="#fef9c3" stroke-width="1.8" />
+              </svg>
+              <span>3-Fold</span>
+            </button>
+
+            <button id="tool-rot4" type="button" class="glyph-btn" data-tool="rot4">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <rect x="5" y="5" width="18" height="18" fill="#a855f7" stroke="#f3e8ff" stroke-width="1.8" />
+              </svg>
+              <span>4-Fold</span>
+            </button>
+
+            <button id="tool-rot6" type="button" class="glyph-btn" data-tool="rot6">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <polygon points="14,3 24,8.5 24,19.5 14,25 4,19.5 4,8.5" fill="#06b6d4" stroke="#cffafe" stroke-width="1.8" />
+              </svg>
+              <span>6-Fold</span>
+            </button>
+
+            <button id="tool-mirror" type="button" class="glyph-btn span-two-cols" data-tool="mirror">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <line x1="5" y1="23" x2="23" y2="5" stroke="#ec4899" stroke-width="2.6" />
+                <circle cx="6" cy="22" r="3.5" fill="#ec4899" stroke="#ffffff" stroke-width="1.3" />
+                <circle cx="22" cy="6" r="3.5" fill="#ec4899" stroke="#ffffff" stroke-width="1.3" />
+              </svg>
+              <span>Mirror Line</span>
+            </button>
+          </div>
+
+          <div class="action-stack">
+            <button id="btn-test-symmetry" type="button" class="btn-primary-test">
+              <span class="test-icon" aria-hidden="true">▶</span> Test Symmetry
+            </button>
+            <div class="sub-action-row">
+              <button id="btn-remove-glyph" type="button" class="btn-subtle">Remove Selected</button>
+              <button id="btn-clear-glyphs" type="button" class="btn-subtle">Clear All Glyphs</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center Column: Interactive 4-Layer Konva Canvas & Status Banner -->
+      <section class="center-stage-area" aria-label="Interactive Crystallographic Stage">
+        <div class="stage-top-bar">
+          <div id="active-specimen-badge" class="specimen-badge hidden">
+            <span class="specimen-tag">Active Specimen:</span>
+            <strong id="active-specimen-title"></strong>
+          </div>
+          <div id="feedback-banner" class="feedback-banner info" role="status" aria-live="polite">
+            <span class="feedback-indicator"></span>
+            <span class="feedback-text">Place a symmetry glyph from the toolbox and click "Test Symmetry".</span>
+          </div>
+        </div>
+
+        <div id="canvas-container" class="konva-stage-host"></div>
+
+        <footer class="stage-hud-footer">
+          <div id="hud-active-glyph" class="hud-item">Selected Glyph: None</div>
+          <div id="hud-snap-status" class="hud-item">14px Magnetic Snap: Ready</div>
+          <div class="hud-item hud-layers-legend">
+            <span><i class="dot dot-bg"></i>Background</span>
+            <span><i class="dot dot-cell"></i>Unit Cell</span>
+            <span><i class="dot dot-glyph"></i>Interactive Glyphs</span>
+            <span><i class="dot dot-ghost"></i>Ghost Verification</span>
+          </div>
+        </footer>
+      </section>
+
+      <!-- Right Sidebar: Discovery Checklist & Hints -->
+      <aside class="panel sidebar-right" aria-label="Discovery Checklist and Hints">
+        <!-- Discovery-Based Checklist -->
+        <section class="panel-section checklist-section">
+          <div class="section-header-row">
+            <h2 class="section-title">Discovery Checklist</h2>
+            <span id="checklist-counter" class="checklist-counter">Found: 0 / 5</span>
+          </div>
+          <p class="helper-caption">Verified symmetry operations and primitive unit cells dynamically populate below as you test them.</p>
+          <ul id="checklist-items" class="checklist-ul"></ul>
+        </section>
+
+        <!-- Hints -->
+        <section class="panel-section">
+          <h2 class="section-title">Hints</h2>
+
+          <div class="hint-toggle-list">
+            <label class="hint-row" for="toggle-toolbox-filter">
+              <input type="checkbox" id="toggle-toolbox-filter" />
+              <div class="hint-meta">
+                <strong>Toolbox Filter Hint</strong>
+                <span>Greys out glyph tools absent from the current specimen</span>
+              </div>
+            </label>
+
+            <label class="hint-row" for="toggle-candidate-points">
+              <input type="checkbox" id="toggle-candidate-points" />
+              <div class="hint-meta">
+                <strong>Candidate Points Toggle</strong>
+                <span>Displays subtle ghost dots at high-symmetry snap sites</span>
+              </div>
+            </label>
+
+            <label class="hint-row" for="toggle-compass-hint">
+              <input type="checkbox" id="toggle-compass-hint" />
+              <div class="hint-meta">
+                <strong>Directional Mirror Compass</strong>
+                <span>Shows valid mirror plane angles without revealing position</span>
+              </div>
+            </label>
+          </div>
+
+          <!-- Circular Directional Compass Widget (Mirrors) -->
+          <div class="compass-card">
+            <div class="compass-header">Mirror Orientation Compass</div>
+            <div class="compass-body">
+              <svg id="mirror-compass-svg" width="150" height="150" viewBox="0 0 150 150" aria-label="Mirror Orientation Compass"></svg>
+              <div id="mirror-compass-readout" class="compass-readout standby">
+                Toggle hint above to reveal mirror angles
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
