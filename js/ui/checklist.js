@@ -59,6 +59,13 @@ export class DiscoveryChecklist {
   }
 
   /**
+   * Check whether a given checklist item ID has already been discovered.
+   */
+  hasDiscovered(id) {
+    return Boolean(id) && this.discoveredMap.has(id);
+  }
+
+  /**
    * Record a newly verified symmetry element or unit cell.
    * Returns true if newly discovered, false if already in the checklist.
    */

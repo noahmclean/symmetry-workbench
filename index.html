@@ -78,7 +78,7 @@
           </div>
 
           <button id="btn-random-shape" type="button" class="btn-secondary full-width">
-            <span aria-hidden="true">↻</span> New Random Shape
+            <span aria-hidden="true">↻</span> Redraw Current Specimen
           </button>
           <button id="btn-random-specimen" type="button" class="btn-secondary full-width">
             <span aria-hidden="true">🎲</span> New Random Crystal Specimen
@@ -159,13 +159,21 @@
               <span>6-Fold</span>
             </button>
 
-            <button id="tool-mirror" type="button" class="glyph-btn span-two-cols" data-tool="mirror">
+            <button id="tool-mirror" type="button" class="glyph-btn" data-tool="mirror">
               <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
                 <line x1="5" y1="23" x2="23" y2="5" stroke="#ec4899" stroke-width="2.6" />
                 <circle cx="6" cy="22" r="3.5" fill="#ec4899" stroke="#ffffff" stroke-width="1.3" />
                 <circle cx="22" cy="6" r="3.5" fill="#ec4899" stroke="#ffffff" stroke-width="1.3" />
               </svg>
               <span>Mirror Line</span>
+            </button>
+
+            <button id="tool-nosym" type="button" class="glyph-btn" data-tool="nosym">
+              <svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true">
+                <circle cx="14" cy="14" r="9.5" fill="rgba(244, 63, 94, 0.18)" stroke="#f43f5e" stroke-width="2" />
+                <line x1="7.2" y1="20.8" x2="20.8" y2="7.2" stroke="#fda4af" stroke-width="2.2" />
+              </svg>
+              <span>No Symmetry</span>
             </button>
           </div>
 
@@ -184,10 +192,6 @@
       <!-- Center Column: Interactive 4-Layer Konva Canvas & Status Banner -->
       <section class="center-stage-area" aria-label="Interactive Crystallographic Stage">
         <div class="stage-top-bar">
-          <div id="active-specimen-badge" class="specimen-badge hidden">
-            <span class="specimen-tag">Active Specimen:</span>
-            <strong id="active-specimen-title"></strong>
-          </div>
           <div id="feedback-banner" class="feedback-banner info" role="status" aria-live="polite">
             <span class="feedback-indicator"></span>
             <span class="feedback-text">Place a symmetry glyph from the toolbox and click "Test Symmetry".</span>
@@ -195,17 +199,6 @@
         </div>
 
         <div id="canvas-container" class="konva-stage-host"></div>
-
-        <footer class="stage-hud-footer">
-          <div id="hud-active-glyph" class="hud-item">Selected Glyph: None</div>
-          <div id="hud-snap-status" class="hud-item">14px Magnetic Snap: Ready</div>
-          <div class="hud-item hud-layers-legend">
-            <span><i class="dot dot-bg"></i>Background</span>
-            <span><i class="dot dot-cell"></i>Unit Cell</span>
-            <span><i class="dot dot-glyph"></i>Interactive Glyphs</span>
-            <span><i class="dot dot-ghost"></i>Ghost Verification</span>
-          </div>
-        </footer>
       </section>
 
       <!-- Right Sidebar: Discovery Checklist & Hints -->

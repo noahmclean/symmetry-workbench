@@ -47,7 +47,7 @@ class SymmetryWorkbenchApp {
     this.mode = 'shape'; // 'shape' | 'wallpaper'
     this.isConvex = false; // Default to non-convex crystal profile to showcase rich symmetry
     this.isTessellated = false; // Tessellated edge-to-edge tiling mode for wallpaper patterns
-    this.seed = 2026;
+    this.seed = Math.floor(Math.random() * 900000) + 100000;
     this.batchTestTimer = null;
 
     // Randomize the ordering and numbering of the 10 crystal specimens and 9 periodic patterns
@@ -69,10 +69,9 @@ class SymmetryWorkbenchApp {
       candidatePoints: false
     };
 
-    // Active presets
-    this.activePointPreset =
-      POINT_GROUP_PRESETS.find((p) => p.id === 'pg_4mm') || POINT_GROUP_PRESETS[0];
-    this.activeWallpaperKey = 'p4m';
+    // Start with a random crystal specimen and random periodic pattern on app open
+    this.activePointPreset = this.shuffledPointPresets[0];
+    this.activeWallpaperKey = this.shuffledWallpaperKeys[0];
 
     // Current generated mathematical models
     this.currentShapeData = null;
@@ -214,57 +213,74 @@ class SymmetryWorkbenchApp {
       this.setMorphology('tessellated');
     });
 
-    // "New Random Shape" / "New Random Pattern" button
+    // Top button: "Redraw Current Specimen" / "Redraw Current Pattern"
+    // Generates a new random instance of the SAME crystal specimen or periodic pattern
+    // while keeping any already-verified unit cell, locked symmetry glyphs, and checklist progress in place.
     document.getElementById('btn-random-shape')?.addEventListener('click', () => {
-      this.seed = (this.seed * 1664525 + 1013904223) >>> 0;
+      this.seed = (this.seed + 1) >>> 0;
 
       if (this.mode === 'shape') {
-        this.solvedPointGroupIds.delete(this.activePointPreset.id);
-        this.rebuildScene(false);
+        this.rebuildScene(true);
         this.checklist.showFeedback(
           'info',
-          'Generated new random crystal geometry and reset the discovery checklist.'
+          'Redrew a new crystal geometry for this specimen (existing symmetry elements preserved).'
         );
       } else {
-        // Pick a new periodic pattern from the randomized dropdown list
-        const otherKeys = this.shuffledWallpaperKeys.filter(
-          (k) => k !== this.activeWallpaperKey
-        );
-        const nextIdx = (this.seed >>> 3) % otherKeys.length;
-        this.activeWallpaperKey = otherKeys[nextIdx];
-        this.solvedWallpaperKeys.delete(this.activeWallpaperKey);
-
-        // If on Tessellated Tiling, keep Tessellated Tiling active; otherwise use Convex Crystal
-        if (!this.isTessellated) {
-          this.isConvex = true;
-        }
-        this.syncMorphologyButtons();
-
-        this.rebuildScene(false);
+        this.rebuildScene(true);
         this.checklist.showFeedback(
           'info',
           this.isTessellated
-            ? 'Selected a new periodic pattern (tessellated tiling) and reset the discovery checklist.'
-            : 'Selected a new periodic pattern (convex crystal) and reset the discovery checklist.'
+            ? 'Generated a new tessellated tiling for this periodic pattern (unit cell & symmetry elements preserved).'
+            : 'Redrew a new motif geometry for this periodic pattern (unit cell & symmetry elements preserved).'
         );
       }
     });
 
-    // "New Random Crystal Specimen" button (Point Group Shapes mode)
+    // Bottom button: "New Random Crystal Specimen" / "New Random Periodic Pattern"
+    // Picks a specimen/pattern at random from those not yet identified (falling back to all other
+    // specimens/patterns once all have been identified) and resets the discovery checklist.
     document.getElementById('btn-random-specimen')?.addEventListener('click', () => {
-      if (this.mode !== 'shape') return;
       this.seed = (this.seed * 1664525 + 1013904223) >>> 0;
-      const otherPresets = this.shuffledPointPresets.filter(
-        (p) => p.id !== this.activePointPreset.id
-      );
-      const nextIdx = (this.seed >>> 3) % otherPresets.length;
-      this.activePointPreset = otherPresets[nextIdx];
-      this.solvedPointGroupIds.delete(this.activePointPreset.id);
-      this.rebuildScene(false);
-      this.checklist.showFeedback(
-        'info',
-        'Selected a new random crystal specimen and reset the discovery checklist.'
-      );
+
+      if (this.mode === 'shape') {
+        const unsolvedOthers = this.shuffledPointPresets.filter(
+          (p) =>
+            p.id !== this.activePointPreset.id && !this.solvedPointGroupIds.has(p.id)
+        );
+        const pool =
+          unsolvedOthers.length > 0
+            ? unsolvedOthers
+            : this.shuffledPointPresets.filter((p) => p.id !== this.activePointPreset.id);
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        this.activePointPreset = picked;
+        if (unsolvedOthers.length === 0) {
+          this.solvedPointGroupIds.delete(picked.id);
+        }
+        this.rebuildScene(false);
+        this.checklist.showFeedback(
+          'info',
+          'Selected a new random crystal specimen and reset the discovery checklist.'
+        );
+      } else {
+        const unsolvedOthers = this.shuffledWallpaperKeys.filter(
+          (k) =>
+            k !== this.activeWallpaperKey && !this.solvedWallpaperKeys.has(k)
+        );
+        const pool =
+          unsolvedOthers.length > 0
+            ? unsolvedOthers
+            : this.shuffledWallpaperKeys.filter((k) => k !== this.activeWallpaperKey);
+        const pickedKey = pool[Math.floor(Math.random() * pool.length)];
+        this.activeWallpaperKey = pickedKey;
+        if (unsolvedOthers.length === 0) {
+          this.solvedWallpaperKeys.delete(pickedKey);
+        }
+        this.rebuildScene(false);
+        this.checklist.showFeedback(
+          'info',
+          'Selected a new random periodic pattern and reset the discovery checklist.'
+        );
+      }
     });
 
     // Glyph placement buttons
@@ -348,7 +364,6 @@ class SymmetryWorkbenchApp {
     document.getElementById('wallpaper-group-controls')?.classList.toggle('hidden', mode !== 'wallpaper');
     document.getElementById('unit-cell-panel')?.classList.toggle('hidden', mode !== 'wallpaper');
     document.getElementById('btn-shape-tessellated')?.classList.toggle('hidden', mode !== 'wallpaper');
-    document.getElementById('btn-random-specimen')?.classList.toggle('hidden', mode !== 'shape');
 
     if (mode === 'shape' && this.isTessellated) {
       this.isTessellated = false;
@@ -361,13 +376,22 @@ class SymmetryWorkbenchApp {
       glyphsTitle.textContent = mode === 'wallpaper' ? '3. Symmetry Glyphs' : '2. Symmetry Glyphs';
     }
 
-    // Update "New Random Shape" vs "New Random Pattern" button label
+    // Update "Redraw Current Specimen" vs "Redraw Current Pattern" button label
     const randomBtn = document.getElementById('btn-random-shape');
     if (randomBtn) {
       randomBtn.innerHTML =
         mode === 'wallpaper'
-          ? '<span aria-hidden="true">↻</span> New Random Pattern'
-          : '<span aria-hidden="true">↻</span> New Random Shape';
+          ? '<span aria-hidden="true">↻</span> Redraw Current Pattern'
+          : '<span aria-hidden="true">↻</span> Redraw Current Specimen';
+    }
+
+    // Update "New Random Crystal Specimen" vs "New Random Periodic Pattern" button label
+    const specimenBtn = document.getElementById('btn-random-specimen');
+    if (specimenBtn) {
+      specimenBtn.innerHTML =
+        mode === 'wallpaper'
+          ? '<span aria-hidden="true">🎲</span> New Random Periodic Pattern'
+          : '<span aria-hidden="true">🎲</span> New Random Crystal Specimen';
     }
 
     this.rebuildScene(false);
@@ -412,6 +436,7 @@ class SymmetryWorkbenchApp {
     if (!preserveProgress) {
       this.glyphManager.clearAll();
       this.unitCellVerified = false;
+      this.resetHints();
     }
 
     const center = this.stageManager.getCenter();
@@ -545,6 +570,26 @@ class SymmetryWorkbenchApp {
     }
   }
 
+  /**
+   * Reset all 3 checkboxes in the Hints panel to unchecked and update stage/compass/toolbox states.
+   */
+  resetHints() {
+    this.hints.compass = false;
+    this.hints.toolboxFilter = false;
+    this.hints.candidatePoints = false;
+
+    const compassToggle = document.getElementById('toggle-compass-hint');
+    const filterToggle = document.getElementById('toggle-toolbox-filter');
+    const candidateToggle = document.getElementById('toggle-candidate-points');
+    if (compassToggle) compassToggle.checked = false;
+    if (filterToggle) filterToggle.checked = false;
+    if (candidateToggle) candidateToggle.checked = false;
+
+    this.stageManager.setShowCandidates(false);
+    this.updateCompassState();
+    this.updateToolboxState();
+  }
+
   updateCompassState() {
     const mirrorAnglesDeg =
       this.mode === 'shape'
@@ -589,11 +634,14 @@ class SymmetryWorkbenchApp {
       el.classList.toggle('filtered-out', shouldGreyOut);
     };
 
+    const hasNoSymmetry = validRotations.length === 0 && !validMirrors;
+
     configureToolBtn('tool-rot2', validRotations.includes(2));
     configureToolBtn('tool-rot3', validRotations.includes(3));
     configureToolBtn('tool-rot4', validRotations.includes(4));
     configureToolBtn('tool-rot6', validRotations.includes(6));
     configureToolBtn('tool-mirror', validMirrors);
+    configureToolBtn('tool-nosym', hasNoSymmetry);
 
     const testSymBtn = document.getElementById('btn-test-symmetry');
     const removeBtn = document.getElementById('btn-remove-glyph');
@@ -604,13 +652,89 @@ class SymmetryWorkbenchApp {
   }
 
   /**
-   * Spawn a glyph onto interactiveLayer when the student clicks a toolbox button.
-   * Rotation glyphs default to the top-left of the shape window; mirror lines
-   * default to vertical along the left-hand side of the shape window in the exact same position.
+   * Spawn a glyph onto interactiveLayer when the student clicks a toolbox button,
+   * or immediately evaluate "No Symmetry" when the student clicks the No Symmetry button.
    */
   spawnGlyphFromToolbox(toolType) {
     if (this.mode === 'wallpaper' && !this.unitCellVerified) return;
+    if (toolType === 'nosym') {
+      this.handleNoSymmetry();
+      return;
+    }
     this.glyphManager.addGlyph(toolType);
+  }
+
+  /**
+   * Evaluate the "No Symmetry" button click immediately:
+   * - If the active crystal specimen or periodic pattern truly has 0 rotational/mirror elements,
+   *   complete the checklist, reveal the specimen/pattern name, and launch celebratory fireworks.
+   * - Otherwise, flash the shape or pattern red on `ghostLayer` and display error feedback.
+   */
+  handleNoSymmetry() {
+    if (this.mode === 'wallpaper' && !this.unitCellVerified) return;
+
+    if (this.mode === 'shape') {
+      const isAsymmetric =
+        (this.currentShapeData?.rotations?.length || 0) === 0 &&
+        (this.currentShapeData?.mirrorAnglesDeg?.length || 0) === 0;
+
+      if (isAsymmetric) {
+        const wasAllFound = this.checklist.isAllFound();
+        this.checklist.markAsymmetricTested();
+        this.updateSpecimenRevealState();
+        const unlockedLabel = this.activePointPreset.label;
+        this.checklist.showFeedback(
+          'success',
+          `Asymmetric profile verified (0 symmetry elements) — unlocked: ${unlockedLabel}!`
+        );
+        if (!wasAllFound && this.checklist.isAllFound()) {
+          this.resetHints();
+          this.verifier.runCelebrationFireworks();
+        }
+      } else {
+        this.verifier.runInvalidNoSymmetryFlash({
+          mode: 'shape',
+          shapeData: this.currentShapeData,
+          tilingData: this.currentTilingData
+        });
+        this.checklist.showFeedback(
+          'error',
+          'Not asymmetric! This crystal specimen possesses rotational or mirror symmetry elements — place glyphs to find them.'
+        );
+      }
+    } else {
+      const isAsymmetric =
+        (this.currentTilingData?.rotations?.length || 0) === 0 &&
+        (this.currentTilingData?.mirrorAnglesDeg?.length || 0) === 0;
+
+      if (isAsymmetric) {
+        const wasAllFound = this.checklist.isAllFound();
+        this.checklist.recordDiscovery(
+          'wp_no_symmetry',
+          'Asymmetric unit cell verified (0 rotational or mirror elements)'
+        );
+        this.updateSpecimenRevealState();
+        const wpLabel = WALLPAPER_PRESETS[this.activeWallpaperKey].label;
+        this.checklist.showFeedback(
+          'success',
+          `Asymmetric unit cell verified (translations only) — unlocked pattern: ${wpLabel}!`
+        );
+        if (!wasAllFound && this.checklist.isAllFound()) {
+          this.resetHints();
+          this.verifier.runCelebrationFireworks();
+        }
+      } else {
+        this.verifier.runInvalidNoSymmetryFlash({
+          mode: 'wallpaper',
+          shapeData: this.currentShapeData,
+          tilingData: this.currentTilingData
+        });
+        this.checklist.showFeedback(
+          'error',
+          'Not asymmetric! This periodic pattern contains rotational axes or mirror lines inside the unit cell.'
+        );
+      }
+    }
   }
 
   /**
@@ -655,28 +779,46 @@ class SymmetryWorkbenchApp {
         tilingData: this.currentTilingData,
         glyph,
         onComplete: (result) => {
+          const wasAllFound = this.checklist.isAllFound();
           if (result.valid) {
-            this.glyphManager.rectifyAndLockGlyph(glyph, result);
-            this.checklist.recordDiscovery(result.checklistId, result.checklistLabel);
-            this.updateSpecimenRevealState();
-            const allFoundNow = this.checklist.isAllFound();
-            const unlockedLabel =
-              this.mode === 'shape'
-                ? this.activePointPreset.label
-                : WALLPAPER_PRESETS[this.activeWallpaperKey].label;
-            const suffix = allFoundNow
-              ? ` All symmetry elements found — unlocked: ${unlockedLabel}!`
-              : '';
-            this.checklist.showFeedback(
-              'success',
-              `${stepPrefix}${result.message}${suffix}`
-            );
+            if (this.checklist.hasDiscovered(result.checklistId)) {
+              lastFailedGlyph = glyph;
+              this.glyphManager.setGlyphStatus(glyph, 'unverified');
+              this.checklist.showFeedback(
+                'warning',
+                `${stepPrefix}Already verified (${result.checklistLabel})! Drag this glyph to another symmetry site or mirror line that hasn't been found yet.`
+              );
+            } else {
+              this.glyphManager.rectifyAndLockGlyph(glyph, result);
+              this.checklist.recordDiscovery(result.checklistId, result.checklistLabel);
+              this.updateSpecimenRevealState();
+              const allFoundNow = this.checklist.isAllFound();
+              const unlockedLabel =
+                this.mode === 'shape'
+                  ? this.activePointPreset.label
+                  : WALLPAPER_PRESETS[this.activeWallpaperKey].label;
+              const suffix = allFoundNow
+                ? ` All symmetry elements found — unlocked: ${unlockedLabel}!`
+                : '';
+              this.checklist.showFeedback(
+                'success',
+                `${stepPrefix}${result.message}${suffix}`
+              );
+              if (!wasAllFound && allFoundNow) {
+                this.resetHints();
+                this.verifier.runCelebrationFireworks();
+              }
+            }
           } else {
             lastFailedGlyph = glyph;
             this.glyphManager.setGlyphStatus(glyph, 'invalid');
             if (this.mode === 'shape' && this.activePointPreset.id === 'pg_1') {
               this.checklist.markAsymmetricTested();
               this.updateSpecimenRevealState();
+              if (!wasAllFound && this.checklist.isAllFound()) {
+                this.resetHints();
+                this.verifier.runCelebrationFireworks();
+              }
             }
             this.checklist.showFeedback('error', `${stepPrefix}${result.message}`);
           }
@@ -720,6 +862,7 @@ class SymmetryWorkbenchApp {
       unitCellVectors,
       onComplete: (result) => {
         if (result.valid) {
+          const wasAllFound = this.checklist.isAllFound();
           this.unitCellVerified = true;
           this.unitCellTool.setStatus('verified');
           this.unitCellTool.setLocked(true);
@@ -743,6 +886,10 @@ class SymmetryWorkbenchApp {
             ? ` All symmetry elements found — unlocked pattern: ${wpLabel}!`
             : ' Symmetry glyphs are now unlocked — drag glyphs onto the unit cell to copy them across the lattice!';
           this.checklist.showFeedback('success', `${result.message}${suffix}`);
+          if (!wasAllFound && allFoundNow) {
+            this.resetHints();
+            this.verifier.runCelebrationFireworks();
+          }
         } else {
           this.unitCellTool.setStatus('invalid');
           this.checklist.showFeedback('error', result.message);

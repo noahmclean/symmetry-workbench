@@ -292,6 +292,7 @@ export class SymmetryVerifier {
         fill: motifFill,
         stroke: '#facc15',
         strokeWidth: 2.6,
+        opacity: mode === 'wallpaper' ? 0.78 : 1.0,
         lineJoin: 'round'
       });
       this.ghostLayer.add(line);
@@ -318,7 +319,9 @@ export class SymmetryVerifier {
       }
     }
 
-    const durationMs = 720;
+    // Play rotation verification animations 1.5x slower (1080ms vs 720ms)
+    const durationMs = glyph.kind === 'rotation' ? 1080 : 720;
+    const pauseBeforeVerdictMs = 1000;
     const startTime = performance.now();
 
     const stepFrame = (now) => {
@@ -350,16 +353,21 @@ export class SymmetryVerifier {
         this.activeAnimId = requestAnimationFrame(stepFrame);
       } else {
         this.activeAnimId = null;
-        this.finalizeSymmetryEvaluation({
-          mode,
-          shapeData,
-          tilingData,
-          glyph,
-          sourcePolygons,
-          targetPolygons,
-          ghostShapes,
-          onComplete
-        });
+        // Pause with the original and transformed images superimposed on top of each other
+        // before turning them green (valid) or red (invalid)
+        this.cleanupTimer = setTimeout(() => {
+          this.cleanupTimer = null;
+          this.finalizeSymmetryEvaluation({
+            mode,
+            shapeData,
+            tilingData,
+            glyph,
+            sourcePolygons,
+            targetPolygons,
+            ghostShapes,
+            onComplete
+          });
+        }, pauseBeforeVerdictMs);
       }
     };
 
@@ -410,15 +418,15 @@ export class SymmetryVerifier {
     }
     this.ghostLayer.batchDraw();
 
-    if (onComplete) {
-      onComplete(result);
-    }
-
     // Fade out ghost layer after student sees the congruence or displacement
     const holdTime = result.valid ? 950 : 1850;
     this.cleanupTimer = setTimeout(() => {
       this.clearGhostLayer();
     }, holdTime);
+
+    if (onComplete) {
+      onComplete(result);
+    }
   }
 
   /**
@@ -590,15 +598,209 @@ export class SymmetryVerifier {
           }
           this.ghostLayer.batchDraw();
 
-          if (onComplete) {
-            onComplete(evalResult);
-          }
-
           const holdTime = isMatch ? 2400 : 3000;
           this.cleanupTimer = setTimeout(() => {
             this.clearGhostLayer();
           }, holdTime);
+
+          if (onComplete) {
+            onComplete(evalResult);
+          }
         }, pauseBeforeVerdictMs);
+      }
+    };
+
+    this.activeAnimId = requestAnimationFrame(stepFrame);
+  }
+
+  /**
+   * Flash the shape or wallpaper pattern red on `ghostLayer` when the student clicks
+   * "No Symmetry" on a specimen or pattern that actually possesses symmetry elements.
+   */
+  runInvalidNoSymmetryFlash({ mode, shapeData, tilingData }) {
+    this.clearGhostLayer();
+    this.isAnimating = true;
+
+    const sourcePolygons =
+      mode === 'shape'
+        ? [shapeData.vertices]
+        : tilingData.motifs.map((m) => m.vertices);
+
+    const flashGroup = new Konva.Group({ opacity: 1 });
+    for (const poly of sourcePolygons) {
+      const line = new Konva.Line({
+        points: pointsToFlatArray(poly),
+        closed: true,
+        fill: 'rgba(239, 68, 68, 0.36)',
+        stroke: '#ef4444',
+        strokeWidth: 2.8,
+        lineJoin: 'round'
+      });
+      flashGroup.add(line);
+    }
+    this.ghostLayer.add(flashGroup);
+    this.ghostLayer.batchDraw();
+
+    const durationMs = 1350;
+    const startTime = performance.now();
+
+    const stepFrame = (now) => {
+      const rawT = Math.min(1, (now - startTime) / durationMs);
+      // Pulse twice sharply then fade out
+      const pulse =
+        rawT < 0.65
+          ? 0.65 + 0.35 * Math.cos(rawT * Math.PI * 6)
+          : Math.max(0, 1 - (rawT - 0.65) / 0.35);
+      flashGroup.opacity(pulse);
+      this.ghostLayer.batchDraw();
+
+      if (rawT < 1) {
+        this.activeAnimId = requestAnimationFrame(stepFrame);
+      } else {
+        this.activeAnimId = null;
+        this.clearGhostLayer();
+      }
+    };
+
+    this.activeAnimId = requestAnimationFrame(stepFrame);
+  }
+
+  /**
+   * Display a celebratory fireworks animation on `ghostLayer` for ~1.9 seconds
+   * when the student finds the final symmetry element and completes the exercise,
+   * then disappear cleanly to reveal the completed solution.
+   */
+  runCelebrationFireworks() {
+    if (this.activeAnimId) {
+      cancelAnimationFrame(this.activeAnimId);
+      this.activeAnimId = null;
+    }
+    if (this.cleanupTimer) {
+      clearTimeout(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.isAnimating = true;
+
+    const w = this.stageManager.width || 800;
+    const h = this.stageManager.height || 600;
+
+    const burstConfigs = [
+      { cx: w * 0.28, cy: h * 0.32, delay: 0, color: '#38bdf8', altColor: '#fde047', radius: 115 },
+      { cx: w * 0.72, cy: h * 0.30, delay: 160, color: '#34d399', altColor: '#a7f3d0', radius: 120 },
+      { cx: w * 0.50, cy: h * 0.24, delay: 310, color: '#facc15', altColor: '#fb923c', radius: 135 },
+      { cx: w * 0.24, cy: h * 0.64, delay: 460, color: '#f472b6', altColor: '#e879f9', radius: 110 },
+      { cx: w * 0.76, cy: h * 0.62, delay: 610, color: '#a855f7', altColor: '#38bdf8', radius: 115 },
+      { cx: w * 0.50, cy: h * 0.50, delay: 750, color: '#10b981', altColor: '#fde047', radius: 145 }
+    ];
+
+    const fireworksGroup = new Konva.Group();
+    this.ghostLayer.add(fireworksGroup);
+
+    const bursts = burstConfigs.map((cfg) => {
+      const group = new Konva.Group({ visible: false });
+      fireworksGroup.add(group);
+
+      const coreGlow = new Konva.Circle({
+        x: cfg.cx,
+        y: cfg.cy,
+        radius: 4,
+        fill: '#ffffff',
+        shadowColor: cfg.color,
+        shadowBlur: 16,
+        opacity: 1
+      });
+      group.add(coreGlow);
+
+      const numRays = 20;
+      const particles = [];
+      for (let i = 0; i < numRays; i++) {
+        const angle = (i * 2 * Math.PI) / numRays + (i % 2 === 0 ? 0.06 : -0.06);
+        const speedFactor = i % 2 === 0 ? 1.0 : 0.68;
+        const pColor = i % 2 === 0 ? cfg.color : cfg.altColor;
+
+        const streak = new Konva.Line({
+          points: [cfg.cx, cfg.cy, cfg.cx, cfg.cy],
+          stroke: pColor,
+          strokeWidth: i % 2 === 0 ? 2.6 : 1.9,
+          lineCap: 'round'
+        });
+        const spark = new Konva.Circle({
+          x: cfg.cx,
+          y: cfg.cy,
+          radius: i % 2 === 0 ? 3.4 : 2.4,
+          fill: pColor
+        });
+        group.add(streak);
+        group.add(spark);
+
+        particles.push({
+          angle,
+          maxDist: cfg.radius * speedFactor,
+          streak,
+          spark
+        });
+      }
+
+      return {
+        ...cfg,
+        group,
+        coreGlow,
+        particles
+      };
+    });
+
+    const burstDuration = 1150;
+    const totalDuration = 750 + burstDuration;
+    const startTime = performance.now();
+
+    const stepFrame = (now) => {
+      const elapsed = now - startTime;
+
+      for (const b of bursts) {
+        const localElapsed = elapsed - b.delay;
+        if (localElapsed < 0 || localElapsed > burstDuration) {
+          b.group.visible(false);
+          continue;
+        }
+
+        b.group.visible(true);
+        const rawT = Math.min(1, localElapsed / burstDuration);
+        // Fast radial expansion (ease-out)
+        const easeOut = 1 - Math.pow(1 - rawT, 3);
+        const gravityDrop = 28 * rawT * rawT;
+        const alpha = rawT < 0.55 ? 1 : Math.max(0, 1 - (rawT - 0.55) / 0.45);
+
+        b.coreGlow.radius(4 + 18 * (1 - rawT));
+        b.coreGlow.opacity(Math.max(0, 1 - rawT * 2.2));
+
+        const tailT = Math.max(0, easeOut - 0.24 * (1 - rawT * 0.5));
+        const tailGravity = 28 * Math.max(0, rawT - 0.14) ** 2;
+
+        for (const p of b.particles) {
+          const cosA = Math.cos(p.angle);
+          const sinA = Math.sin(p.angle);
+
+          const headX = b.cx + cosA * p.maxDist * easeOut;
+          const headY = b.cy + sinA * p.maxDist * easeOut + gravityDrop;
+
+          const tailX = b.cx + cosA * p.maxDist * tailT;
+          const tailY = b.cy + sinA * p.maxDist * tailT + tailGravity;
+
+          p.streak.points([tailX, tailY, headX, headY]);
+          p.streak.opacity(alpha);
+
+          p.spark.position({ x: headX, y: headY });
+          p.spark.opacity(alpha);
+        }
+      }
+
+      this.ghostLayer.batchDraw();
+
+      if (elapsed < totalDuration) {
+        this.activeAnimId = requestAnimationFrame(stepFrame);
+      } else {
+        this.activeAnimId = null;
+        this.clearGhostLayer();
       }
     };
 
